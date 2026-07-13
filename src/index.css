@@ -1,0 +1,117 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  background: #0a0d12;
+  color: #d7dee9;
+  font-family: "Inter", system-ui, sans-serif;
+}
+
+/* Subtle grid backdrop used by the shell. */
+.grid-backdrop {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: -1px -1px;
+}
+
+.card {
+  background: linear-gradient(180deg, #141a24 0%, #10141c 100%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+.kpi-value {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  letter-spacing: -0.5px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.04);
+  color: #b8c1d1;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: #e8edf5;
+  transition: all 120ms ease;
+  cursor: pointer;
+}
+.btn:hover { background: rgba(255, 255, 255, 0.08); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-primary {
+  background: linear-gradient(180deg, #2ec8bf 0%, #22a49c 100%);
+  border-color: transparent;
+  color: #06181a;
+  font-weight: 600;
+}
+.btn-primary:hover { filter: brightness(1.05); }
+.btn-danger {
+  background: rgba(239, 77, 106, 0.15);
+  border-color: rgba(239, 77, 106, 0.35);
+  color: #ffb8c4;
+}
+
+.input, .select {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #e8edf5;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+}
+.input:focus, .select:focus {
+  outline: 2px solid #38e0d6;
+  outline-offset: 0;
+  border-color: transparent;
+}
+
+.section-title {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #7c8798;
+  font-weight: 600;
+}
+
+/* Elevator car pulse when moving */
+@keyframes pulse-cyan {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(56, 224, 214, 0.5); }
+  50% { box-shadow: 0 0 0 8px rgba(56, 224, 214, 0); }
+}
+.car-moving { animation: pulse-cyan 1.4s ease-out infinite; }
+
+/* Slim scrollbar for panels */
+.scroll-area::-webkit-scrollbar { width: 8px; height: 8px; }
+.scroll-area::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 8px; }
+.scroll-area::-webkit-scrollbar-track { background: transparent; }
