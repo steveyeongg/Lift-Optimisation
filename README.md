@@ -322,4 +322,4 @@ safety-certification bodies.
 - Per-strategy KPI drill-downs on the Compare page.
 - Worker-based simulation offload for very large buildings (60+ floors, 8+ cars).
 - Historical demand replay from CSV.
-# Lift-Optimisation
+
