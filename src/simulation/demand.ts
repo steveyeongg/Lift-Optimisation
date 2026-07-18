@@ -16,10 +16,40 @@ export function groundFloorIndex(b: BuildingConfig) {
   return b.basementFloors; // basement floors sit below ground
 }
 
-export function residentialFloorIndices(b: BuildingConfig): number[] {
-  const g = groundFloorIndex(b);
+// Human-level number → floor index. `1` = L1, `-2` = SB2. G = 0.
+function levelToIndex(b: BuildingConfig, level: number): number {
+  return b.basementFloors + level;
+}
+
+// True facility floor set as GLOBAL indices.
+function facilityIndices(b: BuildingConfig): number[] {
+  const raw = b.facilityFloors ?? [];
+  return raw
+    .map((l) => levelToIndex(b, l))
+    .filter((i) => i >= 0 && i < totalFloorCount(b));
+}
+
+// True car-park range as GLOBAL indices [0..parkingTopIndex], inclusive.
+function parkingTopIndex(b: BuildingConfig): number {
+  const top = b.parkingTopFloor;
+  if (top === undefined) return groundFloorIndex(b); // legacy = only up to G
+  return Math.min(levelToIndex(b, top), totalFloorCount(b) - 1);
+}
+
+export function parkingIndices(b: BuildingConfig): number[] {
   const out: number[] = [];
-  for (let i = 1; i <= b.aboveGroundFloors; i++) out.push(g + i);
+  const top = parkingTopIndex(b);
+  for (let i = 0; i <= top; i++) out.push(i);
+  return out;
+}
+
+export function residentialFloorIndices(b: BuildingConfig): number[] {
+  const facility = new Set(facilityIndices(b));
+  const parkTop = parkingTopIndex(b);
+  const out: number[] = [];
+  for (let i = parkTop + 1; i < totalFloorCount(b); i++) {
+    if (!facility.has(i)) out.push(i);
+  }
   return out;
 }
 
@@ -51,6 +81,7 @@ export function populationScale(b: BuildingConfig): number {
 
 function pickResidentialFloor(rand: () => number, b: BuildingConfig): number {
   const floors = residentialFloorIndices(b);
+  if (floors.length === 0) return groundFloorIndex(b);
   return floors[Math.floor(rand() * floors.length)];
 }
 
@@ -60,9 +91,55 @@ function pickBasementFloor(rand: () => number, b: BuildingConfig): number {
   return floors[Math.floor(rand() * floors.length)];
 }
 
+// A parking destination weighted toward Ground (residents walking to lobby)
+// and the rest spread across basement + above-ground car park floors.
+function pickCarParkDestination(rand: () => number, b: BuildingConfig): number {
+  const g = groundFloorIndex(b);
+  const roll = rand();
+  if (roll < 0.55) return g; // most people exit via GF
+  const parking = parkingIndices(b).filter((i) => i !== g);
+  if (parking.length === 0) return g;
+  return parking[Math.floor(rand() * parking.length)];
+}
+
+// A parking origin — where an arriving resident enters the lift.
+function pickCarParkOrigin(rand: () => number, b: BuildingConfig): number {
+  const g = groundFloorIndex(b);
+  // 65% arrive at GF, 35% at basement parking (matching the user's spec).
+  if (rand() < 0.65) return g;
+  const basements = basementFloorIndices(b);
+  if (basements.length === 0) return g;
+  return basements[Math.floor(rand() * basements.length)];
+}
+
+function pickFacilityFloor(rand: () => number, b: BuildingConfig): number | null {
+  const idxs = facilityIndices(b);
+  if (idxs.length === 0) return null;
+  return idxs[Math.floor(rand() * idxs.length)];
+}
+
+// Access-aware residential-origin destination sampler.
+// A resident at floor `origin` typically leaves for parking; sometimes for
+// the facility; rarely to another residential floor (card holder visiting).
+function residentDestination(
+  rand: () => number,
+  b: BuildingConfig,
+  origin: number,
+): number {
+  const facility = pickFacilityFloor(rand, b);
+  const crossProb = b.crossResidentialProbability ?? 0.03;
+  const roll = rand();
+  if (facility !== null && roll < 0.08) return facility;      // facility trips
+  if (roll < 0.08 + crossProb) {                              // cross-residential
+    const others = residentialFloorIndices(b).filter((f) => f !== origin);
+    if (others.length > 0) return others[Math.floor(rand() * others.length)];
+  }
+  return pickCarParkDestination(rand, b);                      // default: car park
+}
+
 // ---- Profiles ----------------------------------------------------------------
 
-// Morning down-peak: residents leave residential floors → ground/basement.
+// Morning down-peak: residents leave residential floors → parking / facility.
 const morningDownPeak: DemandProfile = {
   meanArrivalsPerHour: (t, dur) => {
     // Peak centred at 1/3 of simulated window (approx 8AM in a 7-9AM run).
@@ -70,143 +147,171 @@ const morningDownPeak: DemandProfile = {
   },
   sampleOD: (rand, b) => {
     const origin = pickResidentialFloor(rand, b);
-    const dest = pickWeighted(
-      rand,
-      ["ground", "basement", "other"],
-      [0.7, 0.25, 0.05],
-    );
-    if (dest === "ground") return { origin, destination: groundFloorIndex(b) };
-    if (dest === "basement")
-      return { origin, destination: pickBasementFloor(rand, b) };
-    let other = pickResidentialFloor(rand, b);
-    while (other === origin) other = pickResidentialFloor(rand, b);
-    return { origin, destination: other };
+    return { origin, destination: residentDestination(rand, b, origin) };
   },
 };
 
-// Evening up-peak: residents arrive at ground/basement → residential floors.
+// Evening up-peak: residents arrive from parking → residential floors (+ some
+// to the facility floor for evening use).
 const eveningUpPeak: DemandProfile = {
   meanArrivalsPerHour: (t, dur) => {
     return 550 * (0.35 + 0.9 * bell(t, dur, 0.45, 0.25));
   },
   sampleOD: (rand, b) => {
-    const from = pickWeighted(rand, ["ground", "basement"], [0.65, 0.35]);
-    const origin =
-      from === "ground" ? groundFloorIndex(b) : pickBasementFloor(rand, b);
+    const origin = pickCarParkOrigin(rand, b);
+    const facility = pickFacilityFloor(rand, b);
+    if (facility !== null && rand() < 0.1) return { origin, destination: facility };
     return { origin, destination: pickResidentialFloor(rand, b) };
   },
 };
 
-// Non-peak / interfloor: mixed low intensity.
+// Non-peak / interfloor: mixed low intensity respecting the access model.
 const nonPeak: DemandProfile = {
   meanArrivalsPerHour: () => 90,
   sampleOD: (rand, b) => {
+    const facility = pickFacilityFloor(rand, b);
     const kind = pickWeighted(
       rand,
-      ["down", "up", "interfloor", "basement"],
-      [0.35, 0.35, 0.2, 0.1],
+      ["down", "up", "facilityUp", "facilityDown", "interfloor"],
+      [0.4, 0.35, 0.1, 0.08, 0.07],
     );
     if (kind === "down") {
-      return {
-        origin: pickResidentialFloor(rand, b),
-        destination: groundFloorIndex(b),
-      };
+      // Resident → parking
+      const origin = pickResidentialFloor(rand, b);
+      return { origin, destination: pickCarParkDestination(rand, b) };
     }
     if (kind === "up") {
+      // Arrival at parking → resident's floor
       return {
-        origin: groundFloorIndex(b),
+        origin: pickCarParkOrigin(rand, b),
         destination: pickResidentialFloor(rand, b),
       };
     }
-    if (kind === "basement") {
+    if (facility !== null && kind === "facilityUp") {
+      // Someone going to the facility floor from parking or a residential floor.
+      const originIsResidential = rand() < 0.6;
       return {
-        origin: pickResidentialFloor(rand, b),
-        destination: pickBasementFloor(rand, b),
+        origin: originIsResidential
+          ? pickResidentialFloor(rand, b)
+          : pickCarParkOrigin(rand, b),
+        destination: facility,
       };
     }
-    // interfloor
-    let a = pickResidentialFloor(rand, b);
-    let d = pickResidentialFloor(rand, b);
-    while (d === a) d = pickResidentialFloor(rand, b);
-    return { origin: a, destination: d };
+    if (facility !== null && kind === "facilityDown") {
+      // Leaving the facility.
+      const destResidential = rand() < 0.55;
+      return {
+        origin: facility,
+        destination: destResidential
+          ? pickResidentialFloor(rand, b)
+          : pickCarParkDestination(rand, b),
+      };
+    }
+    // Card-holder cross-residential visit (rare).
+    const a = pickResidentialFloor(rand, b);
+    const others = residentialFloorIndices(b).filter((f) => f !== a);
+    if (others.length === 0) {
+      // Only one residential floor exists → fall back to a parking trip.
+      return { origin: a, destination: pickCarParkDestination(rand, b) };
+    }
+    return { origin: a, destination: others[Math.floor(rand() * others.length)] };
   },
 };
 
-// Lunch delivery spike: short concentrated surge to ground.
+// Lunch delivery spike: short concentrated surge — residents down to GF for
+// food delivery pickup, some incoming visitors going up to residents.
 const lunchSpike: DemandProfile = {
   meanArrivalsPerHour: (t, dur) => 120 + 700 * bell(t, dur, 0.5, 0.08),
   sampleOD: (rand, b) => {
-    const dir = pickWeighted(rand, ["down", "up"], [0.75, 0.25]);
+    const facility = pickFacilityFloor(rand, b);
+    const dir = pickWeighted(rand, ["down", "up", "facility"], [0.7, 0.2, 0.1]);
     if (dir === "down") {
       return {
         origin: pickResidentialFloor(rand, b),
         destination: groundFloorIndex(b),
       };
     }
-    return {
-      origin: groundFloorIndex(b),
-      destination: pickResidentialFloor(rand, b),
-    };
+    if (dir === "up") {
+      return {
+        origin: groundFloorIndex(b),
+        destination: pickResidentialFloor(rand, b),
+      };
+    }
+    if (facility !== null) {
+      return { origin: pickResidentialFloor(rand, b), destination: facility };
+    }
+    return { origin: pickResidentialFloor(rand, b), destination: groundFloorIndex(b) };
   },
 };
 
-// Weekend: bi-modal (mid-morning + late-afternoon), more interfloor traffic.
+// Weekend: bi-modal (mid-morning + late-afternoon), more facility use.
 const weekend: DemandProfile = {
   meanArrivalsPerHour: (t, dur) =>
     120 +
     260 * bell(t, dur, 0.3, 0.12) +
     240 * bell(t, dur, 0.75, 0.15),
   sampleOD: (rand, b) => {
+    const facility = pickFacilityFloor(rand, b);
     const kind = pickWeighted(
       rand,
-      ["down", "up", "interfloor", "basement"],
-      [0.28, 0.28, 0.3, 0.14],
+      ["down", "up", "facilityUp", "facilityDown", "cross"],
+      [0.3, 0.3, 0.15, 0.15, 0.1],
     );
     if (kind === "down") {
       return {
         origin: pickResidentialFloor(rand, b),
-        destination: groundFloorIndex(b),
+        destination: pickCarParkDestination(rand, b),
       };
     }
     if (kind === "up") {
       return {
-        origin: groundFloorIndex(b),
+        origin: pickCarParkOrigin(rand, b),
         destination: pickResidentialFloor(rand, b),
       };
     }
-    if (kind === "basement") {
+    if (facility !== null && kind === "facilityUp") {
       return {
-        origin: pickResidentialFloor(rand, b),
-        destination: pickBasementFloor(rand, b),
+        origin: rand() < 0.5 ? pickResidentialFloor(rand, b) : pickCarParkOrigin(rand, b),
+        destination: facility,
       };
     }
-    let a = pickResidentialFloor(rand, b);
-    let d = pickResidentialFloor(rand, b);
-    while (d === a) d = pickResidentialFloor(rand, b);
-    return { origin: a, destination: d };
+    if (facility !== null && kind === "facilityDown") {
+      return {
+        origin: facility,
+        destination: rand() < 0.5 ? pickResidentialFloor(rand, b) : pickCarParkDestination(rand, b),
+      };
+    }
+    const a = pickResidentialFloor(rand, b);
+    const others = residentialFloorIndices(b).filter((f) => f !== a);
+    if (others.length === 0) {
+      return { origin: a, destination: pickCarParkDestination(rand, b) };
+    }
+    return { origin: a, destination: others[Math.floor(rand() * others.length)] };
   },
 };
 
-// Extreme congestion stress-test.
+// Extreme congestion stress-test — access rules still apply.
 const extreme: DemandProfile = {
   meanArrivalsPerHour: () => 1400,
   sampleOD: (rand, b) => {
-    // Mixed direction, high volume.
-    const dir = pickWeighted(rand, ["down", "up", "inter"], [0.45, 0.4, 0.15]);
-    if (dir === "down")
+    const dir = pickWeighted(rand, ["down", "up", "facility"], [0.5, 0.4, 0.1]);
+    if (dir === "down") {
       return {
         origin: pickResidentialFloor(rand, b),
-        destination: groundFloorIndex(b),
+        destination: pickCarParkDestination(rand, b),
       };
-    if (dir === "up")
+    }
+    if (dir === "up") {
       return {
-        origin: groundFloorIndex(b),
+        origin: pickCarParkOrigin(rand, b),
         destination: pickResidentialFloor(rand, b),
       };
-    let a = pickResidentialFloor(rand, b);
-    let d = pickResidentialFloor(rand, b);
-    while (d === a) d = pickResidentialFloor(rand, b);
-    return { origin: a, destination: d };
+    }
+    const facility = pickFacilityFloor(rand, b);
+    if (facility !== null) {
+      return { origin: pickCarParkOrigin(rand, b), destination: facility };
+    }
+    return { origin: pickCarParkOrigin(rand, b), destination: pickResidentialFloor(rand, b) };
   },
 };
 

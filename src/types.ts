@@ -12,10 +12,24 @@ export type ElevatorState =
   | "DOOR_CLOSING";
 
 export interface BuildingConfig {
-  basementFloors: number;    // e.g. 2 → B2, B1
-  aboveGroundFloors: number; // e.g. 40 → L1..L40
+  basementFloors: number;    // e.g. 3 → SB3, SB2, SB1
+  aboveGroundFloors: number; // e.g. 44 → 1..44 (G is separate)
   unitsPerFloor: number;
   residentsPerUnit: number;
+  // ─── Floor-role model ────────────────────────────────────────────────
+  // parkingTopFloor: the highest above-ground floor that is part of the
+  //   car park. Together with the basements, floors [0..basements+parkingTopFloor]
+  //   form the parking range (e.g. 8 → SB3..L8). Ground floor is always
+  //   inside the parking range.
+  parkingTopFloor?: number;
+  // facilityFloors: floor numbers (above-ground, 1-indexed) that anyone in
+  //   the building can access (gym, sky lounge, function room). Residents
+  //   ignore access-card restrictions to reach these.
+  facilityFloors?: number[];
+  // crossResidentialProbability: chance that a residential-origin trip has
+  //   a residential destination other than parking/facility (i.e. a card
+  //   holder visiting another unit). Small by default.
+  crossResidentialProbability?: number;
 }
 
 export interface ElevatorConfig {

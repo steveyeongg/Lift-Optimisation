@@ -165,6 +165,30 @@ export function ConfigPage({ config, onChange }: Props) {
               onChange={(ev) => patchBuilding({ residentsPerUnit: +ev.target.value })}
             />
           </Field>
+          <Field label="Car park top floor (Ln)">
+            <input
+              type="number"
+              className="input"
+              min={0}
+              max={b.aboveGroundFloors}
+              value={b.parkingTopFloor ?? 0}
+              onChange={(ev) => patchBuilding({ parkingTopFloor: +ev.target.value })}
+            />
+          </Field>
+          <Field label="Facility floors (e.g. 9, 20)">
+            <input
+              type="text"
+              className="input"
+              value={(b.facilityFloors ?? []).join(", ")}
+              onChange={(ev) => {
+                const list = ev.target.value
+                  .split(",")
+                  .map((s) => parseInt(s.trim(), 10))
+                  .filter((n) => !isNaN(n) && n >= 1 && n <= b.aboveGroundFloors);
+                patchBuilding({ facilityFloors: list });
+              }}
+            />
+          </Field>
           <div className="col-span-2 mt-1 rounded-md border border-white/[0.06] bg-white/[0.02] p-2 text-[11px] font-mono text-white/70 leading-relaxed">
             <div>
               Floors:{" "}

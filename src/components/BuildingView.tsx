@@ -1,7 +1,39 @@
 import React, { useMemo } from "react";
 import { SimulationState } from "../types";
 import { floorLabel } from "../simulation/defaults";
-import { totalFloorCount } from "../simulation/demand";
+import { parkingIndices, totalFloorCount } from "../simulation/demand";
+
+type FloorRole = "parking" | "facility" | "ground" | "residential";
+
+function classifyFloor(
+  b: SimulationState["config"]["building"],
+  index: number,
+): FloorRole {
+  if (index === b.basementFloors) return "ground";
+  const facility = new Set(
+    (b.facilityFloors ?? []).map((l) => b.basementFloors + l),
+  );
+  if (facility.has(index)) return "facility";
+  const parkTop =
+    b.parkingTopFloor !== undefined
+      ? b.basementFloors + b.parkingTopFloor
+      : b.basementFloors;
+  if (index <= parkTop) return "parking";
+  return "residential";
+}
+
+const ROLE_COLOR: Record<FloorRole, string> = {
+  parking: "rgba(255,255,255,0.32)",
+  ground: "#f0b429",
+  facility: "#f47ec2",
+  residential: "rgba(255,255,255,0.55)",
+};
+const ROLE_BADGE: Record<FloorRole, string | null> = {
+  parking: "P",
+  ground: null,
+  facility: "F",
+  residential: null,
+};
 
 interface Props {
   state: SimulationState;
@@ -45,6 +77,12 @@ export function BuildingView({
           <div className="text-xs text-white/50">
             {b.aboveGroundFloors} floors · {b.basementFloors} basement ·{" "}
             {state.elevators.length} elevators
+          </div>
+          <div className="flex gap-2 mt-1 text-[10px]">
+            <LegendDot color={ROLE_COLOR.parking} label="Car park" />
+            <LegendDot color={ROLE_COLOR.ground} label="Ground" />
+            <LegendDot color={ROLE_COLOR.facility} label="Facility" />
+            <LegendDot color={ROLE_COLOR.residential} label="Residential" />
           </div>
         </div>
         <div className="flex gap-2 text-[11px]">
@@ -98,7 +136,9 @@ export function BuildingView({
             const downWaiters = state.waitingByFloor[f]?.filter(
               (p) => p.direction === "down",
             ).length;
-            const isGround = f === b.basementFloors;
+            const role = classifyFloor(b, f);
+            const badge = ROLE_BADGE[role];
+            const labelColor = ROLE_COLOR[role];
             return (
               <div
                 key={f}
@@ -107,9 +147,12 @@ export function BuildingView({
               >
                 <div
                   className="w-16 pr-2 text-right font-mono text-[11px]"
-                  style={{ color: isGround ? "#f0b429" : "rgba(255,255,255,0.5)" }}
+                  style={{ color: labelColor }}
                 >
                   {floorLabel(b, f)}
+                  {badge && (
+                    <span className="ml-1 text-[9px] opacity-70">{badge}</span>
+                  )}
                 </div>
                 <div className="w-[74px] flex items-center gap-1 pr-2 text-[10px]">
                   {upWaiters > 0 && (
@@ -183,5 +226,17 @@ export function BuildingView({
         </div>
       </div>
     </div>
+  );
+}
+
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 text-white/60">
+      <span
+        className="inline-block rounded-full"
+        style={{ width: 6, height: 6, background: color }}
+      />
+      {label}
+    </span>
   );
 }

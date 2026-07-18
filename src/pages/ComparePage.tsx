@@ -171,45 +171,54 @@ export function ComparePage({ baseConfig, onApply }: Props) {
                 </tr>
               </thead>
               <tbody>
-                {results.map((m) => (
-                  <tr key={m.strategyId} className="border-t border-white/[0.04]">
-                    <Td accent>
-                      {m.strategyLabel}
-                    </Td>
-                    <Td>
-                      {fmtSeconds(m.avgWait)}
-                      {improvement(m, "avgWait")}
-                    </Td>
-                    <Td>
-                      {fmtSeconds(m.p95Wait)}
-                      {improvement(m, "p95Wait")}
-                    </Td>
-                    <Td>
-                      {fmtSeconds(m.avgJourney)}
-                      {improvement(m, "avgJourney")}
-                    </Td>
-                    <Td>
-                      {fmtInt(m.maxQueue)}
-                      {improvement(m, "maxQueue")}
-                    </Td>
-                    <Td>
-                      {fmtInt(m.floorsTravelled)}
-                      {improvement(m, "floorsTravelled")}
-                    </Td>
-                    <Td>
-                      {fmtFloat(m.energyProxy, 0)}
-                      {improvement(m, "energyProxy")}
-                    </Td>
-                    <Td>
-                      <button
-                        className="btn"
-                        onClick={() => onApply(m.strategyId)}
-                      >
-                        Apply
-                      </button>
-                    </Td>
-                  </tr>
-                ))}
+                {(() => {
+                  const minOf = (key: keyof StrategyMetrics) =>
+                    Math.min(...results.map((r) => r[key] as number));
+                  const best = {
+                    avgWait: minOf("avgWait"),
+                    p95Wait: minOf("p95Wait"),
+                    avgJourney: minOf("avgJourney"),
+                    maxQueue: minOf("maxQueue"),
+                    floorsTravelled: minOf("floorsTravelled"),
+                    energyProxy: minOf("energyProxy"),
+                  };
+                  const isBest = (m: StrategyMetrics, key: keyof typeof best) =>
+                    (m[key] as number) <= best[key] + 1e-9;
+                  return results.map((m) => (
+                    <tr key={m.strategyId} className="border-t border-white/[0.04]">
+                      <Td accent>{m.strategyLabel}</Td>
+                      <Td best={isBest(m, "avgWait")}>
+                        {fmtSeconds(m.avgWait)}
+                        {improvement(m, "avgWait")}
+                      </Td>
+                      <Td best={isBest(m, "p95Wait")}>
+                        {fmtSeconds(m.p95Wait)}
+                        {improvement(m, "p95Wait")}
+                      </Td>
+                      <Td best={isBest(m, "avgJourney")}>
+                        {fmtSeconds(m.avgJourney)}
+                        {improvement(m, "avgJourney")}
+                      </Td>
+                      <Td best={isBest(m, "maxQueue")}>
+                        {fmtInt(m.maxQueue)}
+                        {improvement(m, "maxQueue")}
+                      </Td>
+                      <Td best={isBest(m, "floorsTravelled")}>
+                        {fmtInt(m.floorsTravelled)}
+                        {improvement(m, "floorsTravelled")}
+                      </Td>
+                      <Td best={isBest(m, "energyProxy")}>
+                        {fmtFloat(m.energyProxy, 0)}
+                        {improvement(m, "energyProxy")}
+                      </Td>
+                      <Td>
+                        <button className="btn" onClick={() => onApply(m.strategyId)}>
+                          Apply
+                        </button>
+                      </Td>
+                    </tr>
+                  ));
+                })()}
               </tbody>
             </table>
           </div>
@@ -239,13 +248,26 @@ function Th({ children }: { children?: React.ReactNode }) {
 function Td({
   children,
   accent,
+  best,
 }: {
   children: React.ReactNode;
   accent?: boolean;
+  best?: boolean;
 }) {
   return (
-    <td className={`px-3 py-2 ${accent ? "text-white" : "text-white/70"}`}>
-      {children}
+    <td
+      className={`px-3 py-2 ${accent ? "text-white" : "text-white/70"}`}
+      style={
+        best
+          ? {
+              background: "rgba(143, 209, 79, 0.10)",
+              boxShadow: "inset 2px 0 0 #8fd14f",
+            }
+          : undefined
+      }
+      title={best ? "Best in this column" : undefined}
+    >
+      {best ? <span style={{ color: "#8fd14f" }}>{children}</span> : children}
     </td>
   );
 }

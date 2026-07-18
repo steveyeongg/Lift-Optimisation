@@ -10,11 +10,12 @@ import { ComparePage } from "./pages/ComparePage";
 import { OptimisationLab } from "./pages/OptimisationLab";
 import { ConfigPage } from "./pages/ConfigPage";
 import { MethodologyPage } from "./pages/MethodologyPage";
+import { OverviewPage } from "./pages/OverviewPage";
 import { RecommendationCard } from "./components/RecommendationCard";
 import { buildRecommendation } from "./simulation/recommend";
 
 export default function App() {
-  const [page, setPage] = useState<PageId>("sim");
+  const [page, setPage] = useState<PageId>("start");
   const [config, setConfig] = useState<SimulationConfig>(() => defaultConfig());
   const {
     state,
@@ -82,6 +83,7 @@ export default function App() {
     <div className="h-screen flex bg-ink-950 text-white">
       <Sidebar page={page} onChange={setPage} />
       <main className="flex-1 h-screen overflow-y-auto scroll-area">
+        {page === "start" && <OverviewPage config={config} />}
         {page === "sim" && (
           <>
             <SimulationPage

@@ -5,10 +5,13 @@ import { groundFloorIndex, totalFloorCount } from "./demand";
 
 export function defaultConfig(): SimulationConfig {
   const building = {
-    basementFloors: 3,       // SB3, SB2, SB1
-    aboveGroundFloors: 44,   // 1..44
+    basementFloors: 3,           // SB3, SB2, SB1
+    aboveGroundFloors: 44,       // 1..44
     unitsPerFloor: 8,
     residentsPerUnit: 3,
+    parkingTopFloor: 8,          // SB3..L8 are all car park
+    facilityFloors: [9],         // L9 is the facility floor everyone can access
+    crossResidentialProbability: 0.03,
   };
   const total = totalFloorCount(building);
   const ground = groundFloorIndex(building);

@@ -1,6 +1,7 @@
 node_modules
 dist
 dist-single
+tsconfig.tsbuildinfo
 .DS_Store
 .env
 .env.*

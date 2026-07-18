@@ -1,6 +1,7 @@
 import React from "react";
 
 const NAV = [
+  { id: "start", label: "Start Here", icon: "★" },
   { id: "sim", label: "Simulation", icon: "◨" },
   { id: "control", label: "Control Room", icon: "◉" },
   { id: "analytics", label: "Analytics", icon: "▦" },
